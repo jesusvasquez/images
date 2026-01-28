@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galería del Repositorio</title>
+    <style>
+        /* Estilos Generales */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 40px;
+        }
+
+        h2.folder-title {
+            background-color: #fff;
+            padding: 10px 20px;
+            border-left: 5px solid #3498db;
+            margin-top: 40px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-transform: capitalize;
+        }
+
+        /* Contenedor de la cuadrícula */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 20px 0;
+        }
+
+        /* Tarjetas de imagen */
+        .image-card {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+
+        .image-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .image-card img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover; /* Recorta la imagen para que sea un thumbnail cuadrado/rect */
+            display: block;
+        }
+
+        .image-card .info {
+            padding: 10px;
+            font-size: 0.85em;
+            text-align: center;
+            word-wrap: break-word;
+        }
+
+        .image-card a {
+            text-decoration: none;
+            color: #333;
+        }
+
+        /* Loading y Error */
+        #loading { text-align: center; font-size: 1.2em; color: #666; margin-top: 50px; }
+        .error { color: #e74c3c; text-align: center; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>Galería de Imágenes</h1>
+    
+    <div id="loading">Escaneando directorios...</div>
+    <div id="gallery-container"></div>
+
+    <script>
+        // ==========================================
+        //  CONFIGURACIÓN (¡EDITA ESTO!)
+        // ==========================================
+        const USERNAME = 'jesusvasquez';  // Ej: 'juanperez'
+        const REPO_NAME = 'images';   // Ej: 'mi-galeria'
+        const BRANCH = 'main';                 // Normalmente es 'main' o 'master'
+        // ==========================================
+
+        const container = document.getElementById('gallery-container');
+        const loading = document.getElementById('loading');
+
+        // Extensiones permitidas
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+
+        async function fetchImages() {
+            try {
+                // Usamos la API de GitHub para obtener el árbol de archivos recursivo
+                const apiUrl = `https://api.github.com/repos/${USERNAME}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`;
+                
+                const response = await fetch(apiUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`Error al conectar con GitHub: ${response.statusText}. Verifica tu usuario y nombre de repositorio.`);
+                }
+
+                const data = await response.json();
+                
+                // Filtramos solo los archivos que sean imágenes y que no estén en carpetas ocultas (que empiecen con .)
+                const images = data.tree.filter(item => {
+                    const isFile = item.type === 'blob'; // blob significa archivo
+                    const extension = item.path.substring(item.path.lastIndexOf('.')).toLowerCase();
+                    const isImage = imageExtensions.includes(extension);
+                    return isFile && isImage;
+                });
+
+                if (images.length === 0) {
+                    loading.innerHTML = "No se encontraron imágenes en el repositorio.";
+                    return;
+                }
+
+                organizeAndRender(images);
+                loading.style.display = 'none';
+
+            } catch (error) {
+                loading.innerHTML = `<div class="error">${error.message}</div>`;
+                console.error(error);
+            }
+        }
+
+        function organizeAndRender(images) {
+            // Agrupar imágenes por carpeta
+            const folders = {};
+
+            images.forEach(img => {
+                // Obtenemos la carpeta (todo lo que está antes del nombre del archivo)
+                const pathParts = img.path.split('/');
+                const fileName = pathParts.pop();
+                const folderName = pathParts.length > 0 ? pathParts.join('/') : 'Raíz';
+
+                if (!folders[folderName]) {
+                    folders[folderName] = [];
+                }
+
+                // Construimos la URL cruda (raw) para visualizar la imagen
+                const rawUrl = `https://raw.githubusercontent.com/${USERNAME}/${REPO_NAME}/${BRANCH}/${img.path}`;
+                
+                folders[folderName].push({
+                    name: fileName,
+                    url: rawUrl,
+                    githubLink: `https://github.com/${USERNAME}/${REPO_NAME}/blob/${BRANCH}/${img.path}`
+                });
+            });
+
+            // Renderizar en el HTML
+            // Ordenamos las carpetas alfabéticamente
+            const sortedFolderNames = Object.keys(folders).sort();
+
+            sortedFolderNames.forEach(folderName => {
+                // 1. Crear título de la carpeta
+                const title = document.createElement('h2');
+                title.className = 'folder-title';
+                title.textContent = folderName === 'Raíz' ? 'Carpeta Principal' : folderName;
+                container.appendChild(title);
+
+                // 2. Crear contenedor de grid para esta carpeta
+                const grid = document.createElement('div');
+                grid.className = 'gallery-grid';
+
+                // 3. Crear tarjetas para cada imagen
+                folders[folderName].forEach(image => {
+                    const card = document.createElement('div');
+                    card.className = 'image-card';
+                    
+                    card.innerHTML = `
+                        <a href="${image.url}" target="_blank">
+                            <img src="${image.url}" alt="${image.name}" loading="lazy">
+                            <div class="info">${image.name}</div>
+                        </a>
+                    `;
+                    grid.appendChild(card);
+                });
+
+                container.appendChild(grid);
+            });
+        }
+
+        // Iniciar el script
+        fetchImages();
+    </script>
+</body>
+</html>
